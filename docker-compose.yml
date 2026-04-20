@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bitigchi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bitigchi_db
+      POSTGRES_USER: bitigchi_user
+      POSTGRES_PASSWORD: BitigchiDB2024Secure!
+    ports:
+      - "5432:5432"
+    volumes:
+      - bitigchi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bitigchi_user -d bitigchi_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  bitigchi_pgdata:
+    driver: local

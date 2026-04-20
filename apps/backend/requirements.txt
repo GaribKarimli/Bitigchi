@@ -1,0 +1,38 @@
+# FastAPI & Server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+python-dotenv==1.0.1
+
+# Database
+sqlalchemy==2.0.36
+alembic==1.14.1
+psycopg2-binary==2.9.10
+asyncpg==0.30.0
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+authlib==1.4.0
+httpx==0.28.1
+itsdangerous==2.2.0
+
+# AI / ML
+transformers==4.47.1
+torch==2.5.1
+scikit-learn==1.6.1
+pandas==2.2.3
+numpy==1.26.4
+google-generativeai==0.8.3
+
+# Data Sources
+yfinance==0.2.51
+praw==7.8.1
+feedparser==6.0.11
+
+# Payments & Email
+stripe==11.4.1
+sendgrid==6.11.0
+
+# Utilities
+pydantic[email]==2.10.4
