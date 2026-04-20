@@ -86,14 +86,33 @@ export default function PriceChart({ data, color = "#00d4ff", autoSize = true }:
     }
   }, [data]);
 
+  const handleShareToFeed = () => {
+    if (!chartRef.current) return;
+    try {
+      const canvas = chartRef.current.takeScreenshot();
+      const dataUrl = canvas.toDataURL("image/png");
+      // In a full implementation, this dataUrl (or blob) gets sent to MinIO via the /api/v2/social/posts endpoint.
+      alert("Chart captured! Redirecting to New Post screen...");
+      // Simulate navigation or open a modal here
+    } catch (err) {
+      console.error("Failed to take screenshot:", err);
+    }
+  };
+
   return (
     <div className="relative w-full h-[350px] group">
       <div ref={chartContainerRef} className="w-full h-full" />
       
-      {/* Chart Tools Placeholder (Phase 2) */}
-      <div className="absolute top-2 left-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-         <button className="p-1.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 text-[10px] text-white/60">
+      {/* Chart Tools Placeholder (Phase 2 & 2.5) */}
+      <div className="absolute top-2 left-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+         <button className="px-2 py-1.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 text-[10px] uppercase font-bold tracking-wider text-white/60">
            Select Range
+         </button>
+         <button 
+           onClick={handleShareToFeed}
+           className="px-2 py-1.5 rounded bg-[#00d4ff]/20 border border-[#00d4ff]/30 text-[#00d4ff] hover:bg-[#00d4ff]/30 text-[10px] uppercase font-bold tracking-wider transition-all"
+         >
+           Share to Feed
          </button>
       </div>
     </div>

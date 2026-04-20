@@ -63,13 +63,13 @@ export default function Navbar() {
                 className="text-lg font-bold tracking-wide"
                 style={{ color: "#c9a84c" }}
               >
-                BITIGCHI
+                𐰋𐰃𐱅𐰃𐰏𐰲𐰃
               </span>
               <span
-                className="text-[10px] tracking-[0.3em] uppercase"
+                className="text-[10px] tracking-[0.3em] uppercase mt-[-2px]"
                 style={{ color: "#6b7280" }}
               >
-                Market Intelligence
+                BITIGCHI
               </span>
             </div>
           </Link>
@@ -83,6 +83,21 @@ export default function Navbar() {
             >
               <BarChart3 size={16} />
               Dashboard
+            </Link>
+            <Link
+              href="/feed"
+              className="flex items-center gap-2 text-sm transition-colors hover:text-[#00d4ff] font-bold text-white drop-shadow-[0_0_8px_rgba(0,212,255,0.5)]"
+            >
+              <Users size={16} className="text-[#00d4ff]" />
+              Reels
+            </Link>
+            <Link
+              href="/messages"
+              className="flex items-center gap-2 text-sm transition-colors hover:text-[#00d4ff]"
+              style={{ color: "#a0a0b0" }}
+            >
+              <Users size={16} />
+              Inbox
             </Link>
             <Link
               href="/news"
@@ -100,14 +115,7 @@ export default function Navbar() {
               <BookOpen size={16} />
               Learn
             </Link>
-            <Link
-              href="/community"
-              className="flex items-center gap-2 text-sm transition-colors hover:text-[#00d4ff]"
-              style={{ color: "#a0a0b0" }}
-            >
-              <Users size={16} />
-              Community
-            </Link>
+
 
             {/* Search Bar */}
             <form onSubmit={handleSearch} className="relative hidden lg:block ml-4">
@@ -183,6 +191,14 @@ export default function Navbar() {
                       border: "1px solid rgba(255,255,255,0.08)",
                     }}
                   >
+                    <Link
+                      href="/user/1"
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-white/5"
+                      style={{ color: "#e8e6e3" }}
+                    >
+                      <User size={14} />
+                      My Profile
+                    </Link>
                     <Link
                       href="/settings"
                       className="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-white/5"
@@ -310,6 +326,12 @@ export default function Navbar() {
 
             <Link href="/" onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-sm rounded-lg hover:bg-white/5" style={{ color: "#e8e6e3" }}>
               Dashboard
+            </Link>
+            <Link href="/feed" onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-sm font-bold text-[#00d4ff] rounded-lg hover:bg-white/5">
+              Reels
+            </Link>
+            <Link href="/messages" onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-sm rounded-lg hover:bg-white/5" style={{ color: "#e8e6e3" }}>
+              Inbox
             </Link>
             <div className="px-3 py-2">
               <label className="text-xs text-gray-500 mb-2 block uppercase tracking-wider">Language</label>

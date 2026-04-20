@@ -36,3 +36,8 @@ sendgrid==6.11.0
 
 # Utilities
 pydantic[email]==2.10.4
+
+# Phase 2.5: Multi-DB & Storage
+motor>=3.7.0
+minio>=7.2.14
+Pillow>=11.0.0

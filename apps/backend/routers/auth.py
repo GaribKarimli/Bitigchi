@@ -50,7 +50,8 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
         full_name=data.full_name,
         role=UserRole.USER,
         is_active=True,
-        is_verified=False,
+        # Auto-verify if email service isn't configured, otherwise they are locked out
+        is_verified=False if settings.sendgrid_configured else True,
     )
     db.add(user)
     db.flush()
@@ -317,6 +318,35 @@ def update_me(
         created_at=current_user.created_at,
     )
 
+from fastapi import UploadFile, File
+from services.minio_service import compress_and_upload_image
+
+@router.post("/me/avatar", response_model=UserResponse)
+async def update_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload and update user profile picture."""
+    # Upload to MinIO
+    avatar_url = await compress_and_upload_image(file, folder="avatars")
+    
+    current_user.avatar_url = avatar_url
+    db.commit()
+    db.refresh(current_user)
+
+    plan = get_user_plan(current_user, db)
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        avatar_url=current_user.avatar_url,
+        role=current_user.role.value,
+        is_active=current_user.is_active,
+        is_verified=current_user.is_verified,
+        plan=plan,
+        created_at=current_user.created_at,
+    )
 
 # ─── Helpers ────────────────────────────────────────────
 

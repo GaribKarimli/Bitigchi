@@ -21,6 +21,9 @@ from routers import (
     admin, news, lookup, ai_chat, social
 )
 
+from db.mongo import connect_to_mongo, close_mongo_connection
+from services.minio_service import init_minio
+
 # ─── Logging ────────────────────────────────────────────
 
 logging.basicConfig(
@@ -38,10 +41,16 @@ async def lifespan(app: FastAPI):
     """Startup: create tables, seed admin. Shutdown: cleanup."""
     logger.info("🚀 Bitigchi backend starting...")
 
-    # Create all tables
+    # Initialize MinIO
+    init_minio()
+
+    # Initialize MongoDB
+    await connect_to_mongo()
+
+    # Create all tables (Postgres)
     try:
         Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database tables created / verified")
+        logger.info("✅ Postgres Database tables created / verified")
     except Exception as e:
         logger.error(f"❌ Database connection failed: {e}")
         logger.warning("⚠️  Running in degraded mode (no database)")
@@ -62,6 +71,7 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("👋 Bitigchi backend shutting down...")
+    await close_mongo_connection()
 
 
 def _seed_admin():
@@ -133,6 +143,11 @@ app.include_router(news.router)
 app.include_router(lookup.router)
 app.include_router(ai_chat.router)
 app.include_router(social.router)
+
+# Phase 2.5: MongoDB Social & Messaging
+from routers import social_mongo, messages
+app.include_router(social_mongo.router)
+app.include_router(messages.router)
 
 
 # ─── Health Check ───────────────────────────────────────

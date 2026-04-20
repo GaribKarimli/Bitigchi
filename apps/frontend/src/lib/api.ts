@@ -97,6 +97,25 @@ export async function updateProfile(token: string, data: { full_name?: string })
   });
 }
 
+export async function uploadAvatar(token: string, file: File): Promise<UserProfile> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/api/auth/me/avatar`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to upload avatar");
+  }
+
+  return res.json();
+}
+
 export async function forgotPassword(email: string): Promise<void> {
   await apiFetch("/api/auth/forgot-password", {
     method: "POST",

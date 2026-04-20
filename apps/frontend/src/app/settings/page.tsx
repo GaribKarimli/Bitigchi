@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { updateProfile, submitFeedback, getCustomerPortal } from "@/lib/api";
+import { updateProfile, submitFeedback, getCustomerPortal, uploadAvatar } from "@/lib/api";
 import { User, CreditCard, MessageSquare, Save, Loader2, Star, CheckCircle, ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -14,6 +14,7 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState(user?.full_name || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Feedback
   const [rating, setRating] = useState(5);
@@ -25,6 +26,20 @@ export default function SettingsPage() {
     router.push("/login");
     return null;
   }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0] || !token) return;
+    const file = e.target.files[0];
+    setUploadingImage(true);
+    try {
+      await uploadAvatar(token, file);
+      await refreshUser();
+    } catch {
+      alert("Failed to upload image");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!token) return;
@@ -95,7 +110,23 @@ export default function SettingsPage() {
               )}
             </div>
 
-            <div className="space-y-4">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-16 h-16 rounded-full bg-black flex items-center justify-center overflow-hidden border border-white/20">
+                  {user?.avatar_url ? (
+                     <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                     <User size={32} className="text-white/20" />
+                  )}
+                </div>
+                <div>
+                  <label className="btn-secondary text-xs cursor-pointer inline-block">
+                    {uploadingImage ? "Uploading..." : "Upload Picture"}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage}/>
+                  </label>
+                  <p className="text-[10px] text-white/40 mt-1">JPEG, PNG or WebP.</p>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-medium mb-2 block" style={{ color: "#6b7280" }}>Email</label>
                 <input type="email" value={user?.email || ""} disabled className="input-bitigchi opacity-50 cursor-not-allowed" />
@@ -104,11 +135,10 @@ export default function SettingsPage() {
                 <label className="text-xs font-medium mb-2 block" style={{ color: "#6b7280" }}>Full Name</label>
                 <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} className="input-bitigchi" placeholder="Your name" />
               </div>
-              <button onClick={handleSaveProfile} disabled={saving} className="btn-primary flex items-center gap-2">
+              <button onClick={handleSaveProfile} disabled={saving} className="btn-primary flex items-center justify-center gap-2">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <CheckCircle size={14} /> : <Save size={14} />}
                 {saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}
               </button>
-            </div>
           </motion.div>
 
           {/* Subscription */}

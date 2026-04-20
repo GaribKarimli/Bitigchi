@@ -26,7 +26,7 @@ def get_bitigchi_ai_response(
         return "I'm sorry, my AI processing unit (Gemini API Key) is not configured yet. Please contact the administrator. But looking at the data, I am optimistic about the market!"
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-pro")
         
         # Prepare context-aware system prompt
         context_str = ""
