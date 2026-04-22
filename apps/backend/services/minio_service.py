@@ -8,12 +8,12 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# Replace with your env variables or config
-MINIO_ENDPOINT = "localhost:9000"
-MINIO_ACCESS_KEY = "minioadmin"
-MINIO_SECRET_KEY = "minioadminpassword"
-BUCKET_NAME = "bitigchi-media"
-MINIO_PUBLIC_URL = "http://localhost:9000"
+# MinIO settings from environment
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadminpassword")
+BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "bitigchi-media")
+MINIO_PUBLIC_URL = os.getenv("MINIO_PUBLIC_URL", "http://localhost:9000")
 
 # Initialize MinIO Client
 minio_client = Minio(

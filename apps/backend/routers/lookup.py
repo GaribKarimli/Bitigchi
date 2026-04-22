@@ -1,16 +1,11 @@
-"""
-Stock Lookup Router — on-demand data for any ticker symbol.
-Allows users to search for stocks not in the curated 30-ticker list.
-"""
-
 import logging
 import time
+import os
+import requests as req
 from datetime import datetime, timezone
 from typing import Optional
 
-import yfinance as yf
 import pandas as pd
-import httpx
 from fastapi import APIRouter, HTTPException
 
 from config import settings
@@ -19,97 +14,68 @@ from services.stock_data import calculate_rsi, calculate_sma
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Lookup"])
 
-# Simple in-memory cache: {symbol: {data, timestamp}}
+# Simple in-memory cache
 _lookup_cache: dict[str, dict] = {}
 CACHE_TTL = 300  # 5 minutes
-
-
 def _fetch_ticker_data(symbol: str, period: str = "3mo", interval: str = "1d") -> Optional[dict]:
-    """Fetch full data for a single ticker with specified period and interval."""
-    try:
-        ticker = yf.Ticker(symbol)
+    """Fetch full data for a single ticker with multiple redundancy layers and live pricing."""
+    # Layer 0: Always fetch a fresh Live Quote from Finnhub (Header Price)
+    live_quote = _fetch_live_quote(symbol)
 
-        df = ticker.history(period=period, interval=interval)
-        if df is None or df.empty or len(df) < 2:
-            return _fetch_twelvedata(symbol, period=period, interval=interval)
+    # Layer 1: TwelveData (Primary for rich history)
+    data = _fetch_twelvedata(symbol, period=period, interval=interval)
+    if not (data and data.get("price_history")):
+        # Layer 2: Finnhub Candles (Secondary for charts when TD fails/throttles)
+        data = _fetch_finnhub_candles(symbol, period=period)
 
-        df.reset_index(inplace=True)
-
-        # Basic info
-        try:
-            fi = ticker.fast_info
-            name = symbol
-            sector = "Unknown"
-            current_price = getattr(fi, "last_price", None)
-            market_cap = getattr(fi, "market_cap", None)
-            volume = getattr(fi, "last_volume", None)
-        except Exception:
-            current_price = float(df["Close"].iloc[-1])
-            name = symbol
-            sector = "Unknown"
-            market_cap = None
-            volume = int(df["Volume"].iloc[-1]) if pd.notna(df["Volume"].iloc[-1]) else None
-
-        # Try to get full info for name/sector
-        try:
-            info = ticker.info or {}
-            name = info.get("shortName") or info.get("longName") or symbol
-            sector = info.get("sector", "Unknown")
-            if current_price is None:
-                current_price = info.get("currentPrice") or info.get("regularMarketPrice")
-        except Exception:
-            pass
-
-        if current_price is None and len(df) > 0:
-            current_price = float(df["Close"].iloc[-1])
-
-        # Price change (last trading day)
-        if len(df) >= 2:
-            change_pct = round(
-                ((df["Close"].iloc[-1] - df["Close"].iloc[-2]) / df["Close"].iloc[-2]) * 100, 2
-            )
-        else:
-            change_pct = 0.0
-
-        rsi = calculate_rsi(df) or 50.0
-        sma_20 = calculate_sma(df, 20)
-        sma_50 = calculate_sma(df, 50)
-
-        # Price history for chart (last 30 days)
-        history_slice = df.tail(30)
-        price_history = []
-        for _, row in history_slice.iterrows():
-            date_val = row.get("Date")
-            date_str = date_val.isoformat() if hasattr(date_val, "isoformat") else str(date_val)
-            price_history.append({
-                "date": date_str,
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
-                "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else 0,
-            })
-
-        latest_vol = df["Volume"].iloc[-1]
-
-        return {
+    if not data and live_quote:
+        # ULTIMATE FALLBACK: Construct 1-point history from live quote so chart/UI don't break
+        data = {
             "symbol": symbol.upper(),
-            "name": name,
-            "sector": sector,
-            "current_price": round(current_price, 2) if current_price else None,
-            "change_pct": float(change_pct),
-            "volume": int(latest_vol) if pd.notna(latest_vol) else None,
-            "market_cap": market_cap,
-            "rsi": float(rsi),
-            "sma_20": sma_20,
-            "sma_50": sma_50,
-            "price_history": price_history,
-            "cluster": None,
-            "cluster_label": None,
+            "name": symbol,
+            "sector": "Unknown",
+            "current_price": live_quote["current_price"],
+            "change_pct": live_quote["change_pct"],
+            "volume": live_quote.get("volume", 0),
+            "price_history": [{
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                "open": live_quote["current_price"],
+                "high": live_quote["current_price"],
+                "low": live_quote["current_price"],
+                "close": live_quote["current_price"],
+                "volume": live_quote.get("volume", 0)
+            }]
         }
-    except Exception as e:
-        logger.error(f"yfinance lookup failed for {symbol}: {e}")
-        return _fetch_twelvedata(symbol, period=period, interval=interval)
+
+    if not data:
+        return None
+
+    # Merge Live Quote over historical data to ensure current accuracy
+    if live_quote:
+        data["current_price"] = live_quote["current_price"]
+        data["change_pct"] = live_quote["change_pct"]
+        data["volume"] = live_quote.get("volume", data["volume"])
+        data["live_source"] = "Finnhub (BATS/CBOE Real-time)"
+
+    # ALWAYS ensure SMA/RSI are calculated based on whatever history we got
+    if data.get("price_history") and len(data["price_history"]) > 5:
+        df_mini = pd.DataFrame({
+            "Close":  [p["close"]  for p in data["price_history"]],
+            "Open":   [p["open"]   for p in data["price_history"]],
+            "High":   [p["high"]   for p in data["price_history"]],
+            "Low":    [p["low"]    for p in data["price_history"]],
+            "Volume": [p["volume"] for p in data["price_history"]],
+        })
+        data["rsi"] = float(calculate_rsi(df_mini) or 50.0)
+        data["sma_20"] = calculate_sma(df_mini, 20)
+        data["sma_50"] = calculate_sma(df_mini, 50)
+    else:
+        # Default/Fallback values to avoid blank UI
+        data["rsi"] = data.get("rsi") or 50.0
+        data["sma_20"] = data.get("sma_20")
+        data["sma_50"] = data.get("sma_50")
+
+    return data
 
 
 def _fetch_twelvedata(symbol: str, period: str = "3mo", interval: str = "1d") -> Optional[dict]:
@@ -132,6 +98,8 @@ def _fetch_twelvedata(symbol: str, period: str = "3mo", interval: str = "1d") ->
         "3mo": {"interval": "1day", "outputsize": "90"},
         "6mo": {"interval": "1day", "outputsize": "180"},
         "1y": {"interval": "1day", "outputsize": "365"},
+        "5y": {"interval": "1day", "outputsize": "1260"},
+        "max": {"interval": "1day", "outputsize": "5000"},
     }
     
     cfg = mapping.get(period, mapping["3mo"]) # Default to 3mo
@@ -150,7 +118,7 @@ def _fetch_twelvedata(symbol: str, period: str = "3mo", interval: str = "1d") ->
 
         if d.get("status") == "error" or not d.get("values"):
             logger.warning(f"Twelve Data error for {symbol}: {d.get('message')}")
-            return _fetch_finnhub_quote_only(symbol)
+            return None # Trigger fallback in _fetch_ticker_data
 
         values = d["values"]  # newest first
         values_asc = list(reversed(values))  # oldest first for RSI/SMA
@@ -177,35 +145,6 @@ def _fetch_twelvedata(symbol: str, period: str = "3mo", interval: str = "1d") ->
         change_pct = round(((current_price - prev_close) / prev_close) * 100, 2)
         latest_volume = int(values[0].get("volume", 0))
 
-        # RSI / SMA from price history
-        df_mini = pd.DataFrame({
-            "Close":  [p["close"]  for p in price_history],
-            "Open":   [p["open"]   for p in price_history],
-            "High":   [p["high"]   for p in price_history],
-            "Low":    [p["low"]    for p in price_history],
-            "Volume": [p["volume"] for p in price_history],
-        })
-        rsi = calculate_rsi(df_mini) or 50.0
-        sma_20 = calculate_sma(df_mini, 20)
-        sma_50 = calculate_sma(df_mini, 50)
-
-        # Finnhub for company name, sector, market cap
-        name = symbol
-        sector = "Unknown"
-        market_cap = None
-        finnhub_key = os.getenv("FINNHUB_API_KEY")
-        if finnhub_key:
-            try:
-                prof = req.get(
-                    f"https://finnhub.io/api/v1/stock/profile2?symbol={symbol}&token={finnhub_key}",
-                    timeout=5
-                ).json()
-                name = prof.get("name", symbol)
-                sector = prof.get("finnhubIndustry", "Unknown")
-                market_cap = prof.get("marketCapitalization")
-            except Exception:
-                pass
-
         logger.info(f"Twelve Data fetch succeeded for {symbol}: {len(price_history)} bars")
         return {
             "symbol": symbol.upper(),
@@ -215,9 +154,6 @@ def _fetch_twelvedata(symbol: str, period: str = "3mo", interval: str = "1d") ->
             "change_pct": change_pct,
             "volume": latest_volume,
             "market_cap": market_cap,
-            "rsi": float(rsi),
-            "sma_20": sma_20,
-            "sma_50": sma_50,
             "price_history": price_history,
             "cluster": None,
             "cluster_label": None,
@@ -225,7 +161,135 @@ def _fetch_twelvedata(symbol: str, period: str = "3mo", interval: str = "1d") ->
 
     except Exception as e:
         logger.error(f"Twelve Data fetch failed for {symbol}: {e}")
-        return _fetch_finnhub_quote_only(symbol)
+        return None
+
+
+def _fetch_finnhub_candles(symbol: str, period: str = "3mo") -> Optional[dict]:
+    """Fetch candles from Finnhub as a reliable fallback for TwelveData."""
+    import os
+    import requests as req
+    from datetime import datetime, timedelta
+
+    finnhub_key = os.getenv("FINNHUB_API_KEY")
+    if not finnhub_key:
+        return None
+
+    # Map period to Finnhub resolution and 'from' timestamp
+    now = int(time.time())
+    mapping = {
+        "1d":   {"res": "5",  "days": 1},
+        "1mo":  {"res": "60", "days": 30},
+        "3mo":  {"res": "D",  "days": 90},
+        "6mo":  {"res": "D",  "days": 180},
+        "1y":   {"res": "D",  "days": 365},
+        "5y":   {"res": "W",  "days": 1825},
+        "max":  {"res": "M",  "days": 7300},
+    }
+    
+    cfg = mapping.get(period, mapping["3mo"])
+    start_ts = int((datetime.now() - timedelta(days=cfg["days"])).timestamp())
+    
+    try:
+        url = (
+            f"https://finnhub.io/api/v1/stock/candle"
+            f"?symbol={symbol.upper()}&resolution={cfg['res']}"
+            f"&from={start_ts}&to={now}&token={finnhub_key}"
+        )
+        r = req.get(url, timeout=10)
+        d = r.json()
+
+        if d.get("s") != "ok" or not d.get("c"):
+            logger.warning(f"Finnhub candle error for {symbol}: {d.get('s')}")
+            return None
+
+        # Format price history
+        price_history = []
+        for i in range(len(d["t"])):
+            dt = datetime.fromtimestamp(d["t"][i], tz=timezone.utc)
+            price_history.append({
+                "date": dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "open": round(float(d["o"][i]), 2),
+                "high": round(float(d["h"][i]), 2),
+                "low": round(float(d["l"][i]), 2),
+                "close": round(float(d["c"][i]), 2),
+                "volume": int(d["v"][i]),
+            })
+
+        current_price = price_history[-1]["close"]
+        prev_close = price_history[-2]["close"] if len(price_history) > 1 else current_price
+        change_pct = round(((current_price - prev_close) / prev_close) * 100, 2)
+
+        # Profile fetch for basic info
+        prof = req.get(
+            f"https://finnhub.io/api/v1/stock/profile2?symbol={symbol}&token={finnhub_key}",
+            timeout=5
+        ).json()
+
+        logger.info(f"Finnhub candle fetch succeeded for {symbol}: {len(price_history)} bars")
+        return {
+            "symbol": symbol.upper(),
+            "name": prof.get("name", symbol),
+            "sector": prof.get("finnhubIndustry", "Unknown"),
+            "current_price": round(current_price, 2),
+            "change_pct": change_pct,
+            "volume": price_history[-1]["volume"],
+            "market_cap": prof.get("marketCapitalization"),
+            "rsi": 50.0,  # Fallback
+            "sma_20": None,
+            "sma_50": None,
+            "price_history": price_history,
+            "cluster": None,
+            "cluster_label": None,
+        }
+    except Exception as e:
+        logger.error(f"Finnhub candle fallback failed for {symbol}: {e}")
+        return None
+
+
+def _fetch_live_quote(symbol: str) -> Optional[dict]:
+    """Fetch the absolute latest price (Live/Pre-market) with multiple source redundancy."""
+    import os
+    import requests as req
+
+    # Source 1: TwelveData Quote (Often better pre-market coverage)
+    td_key = os.getenv("TWELVEDATA_API_KEY")
+    if td_key:
+        try:
+            url = f"https://api.twelvedata.com/quote?symbol={symbol.upper()}&apikey={td_key}"
+            r = req.get(url, timeout=5)
+            d = r.json()
+            if d.get("price"):
+                return {
+                    "current_price": round(float(d["price"]), 2),
+                    "change_pct": round(float(d.get("percent_change", 0.0)), 2),
+                    "volume": int(d.get("volume", 0)),
+                    "high": float(d.get("high", 0)),
+                    "low": float(d.get("low", 0)),
+                    "open": float(d.get("open", 0)),
+                    "prev_close": float(d.get("previous_close", 0)),
+                    "source": "TwelveData"
+                }
+        except Exception:
+            pass
+
+    # Source 2: Finnhub Quote (Solid fallback)
+    finnhub_key = os.getenv("FINNHUB_API_KEY")
+    if finnhub_key:
+        try:
+            url = f"https://finnhub.io/api/v1/quote?symbol={symbol.upper()}&token={finnhub_key}"
+            r = req.get(url, timeout=5)
+            d = r.json()
+            if d.get("c"):
+                return {
+                    "current_price": round(float(d["c"]), 2),
+                    "change_pct": round(float(d.get("dp", 0.0)), 2),
+                    "volume": d.get("v"),
+                    "source": "Finnhub"
+                }
+        except Exception:
+            pass
+            
+    return None
 
 
 def _fetch_finnhub_quote_only(symbol: str) -> Optional[dict]:

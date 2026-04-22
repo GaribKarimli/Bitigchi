@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Users, TrendingUp, MessageSquare, ArrowRight } from "lucide-react";
-import { fetchCommunityFeed, Comment } from "@/lib/api";
+import { fetchCommunityFeed, SocialComment } from "@/lib/api";
 import Link from "next/link";
 
 export default function CommunityPage() {
-  const [feed, setFeed] = useState<Comment[]>([]);
+  const [feed, setFeed] = useState<SocialComment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

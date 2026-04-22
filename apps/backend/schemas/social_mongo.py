@@ -63,3 +63,37 @@ class FollowStatus(BaseModel):
     is_following: bool
     followers_count: int
     following_count: int
+
+# -----------------
+# Comments
+# -----------------
+class CommentResponse(BaseModel):
+    id: str = Field(alias="_id")
+    post_id: str
+    user_id: int
+    user_name: str
+    user_avatar: Optional[str] = None
+    content: str
+    created_at: datetime
+    
+    class Config:
+        populate_by_name = True
+
+# -----------------
+# User Search & Profile
+# -----------------
+class UserSearchResponse(BaseModel):
+    id: int
+    full_name: str
+    avatar_url: Optional[str] = None
+    is_premium: bool = False
+
+class ProfileViewResponse(BaseModel):
+    id: str = Field(alias="_id")
+    viewer_id: int
+    viewer_name: str
+    viewer_avatar: Optional[str] = None
+    viewed_at: datetime
+
+    class Config:
+        populate_by_name = True

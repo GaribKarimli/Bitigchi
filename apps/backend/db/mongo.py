@@ -1,10 +1,11 @@
+import os
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 
 logger = logging.getLogger(__name__)
 
-# Replace with your MongoDB connection string if different
-MONGO_URL = "mongodb://bitigchi_admin:BitigchiMongo2024Secure!@localhost:27017"
+# Replace with your MongoDB connection string from environment
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://bitigchi_admin:BitigchiMongo2024Secure!@localhost:27017")
 
 class MongoDB:
     client: AsyncIOMotorClient = None

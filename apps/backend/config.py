@@ -72,6 +72,10 @@ class Settings:
         "ADMIN_DEFAULT_PASSWORD", "BitigchiAdmin2024!"
     )
 
+    # --- Market Data APIs ---
+    TWELVEDATA_API_KEY: str = os.getenv("TWELVEDATA_API_KEY", "")
+    FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "")
+
     # --- Curated Ticker Universe ---
     TICKERS: list[str] = [
         "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA",

@@ -303,6 +303,43 @@ export async function fetchStockLookup(
   return apiFetch<TickerItem>(url, { token });
 }
 
+// ─── Social V1 (Postgres) ──────────────────────────────
+
+export interface UserPublic {
+  full_name: string | null;
+  email: string;
+}
+
+export interface SocialComment {
+  id: number;
+  user: UserPublic;
+  symbol: string;
+  content: string;
+  sentiment: "bullish" | "bearish" | "neutral" | null;
+  parent_id: number | null;
+  created_at: string;
+  likes_count: number;
+}
+
+export async function fetchCommunityFeed(limit: number = 20): Promise<SocialComment[]> {
+  return apiFetch<SocialComment[]>(`/api/social/community/feed?limit=${limit}`);
+}
+
+export async function postComment(
+  token: string,
+  data: { symbol: string; content: string; sentiment?: string; parent_id?: number }
+): Promise<SocialComment> {
+  return apiFetch<SocialComment>("/api/social/comments", {
+    method: "POST",
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchComments(symbol: string): Promise<SocialComment[]> {
+  return apiFetch<SocialComment[]>(`/api/social/comments/${encodeURIComponent(symbol)}`);
+}
+
 // ─── Analyst / Bitigchi Score ─────────────────────────
 
 export interface AnalystTrend {
@@ -332,51 +369,117 @@ export async function fetchAnalystData(symbol: string, token?: string): Promise<
   return apiFetch<AnalystResponse>(`/api/analyst/${encodeURIComponent(symbol)}`, { token });
 }
 
-// ─── Social / Discussion ──────────────────────────────
+// ─── Social V2 (MongoDB) ──────────────────────────────
 
-export interface Comment {
-  id: number;
-  user: {
-    full_name: string | null;
-    email: string;
-  };
-  symbol: string;
+export interface Post {
+  id: string;
+  user_id: number;
+  user_name: string;
+  user_avatar: string | null;
   content: string;
-  sentiment: string | null;
-  created_at: string;
+  ticker: string | null;
+  media_url: string | null;
+  media_type: "image" | "video" | null;
+  sentiment: "bullish" | "bearish" | null;
   likes_count: number;
+  comments_count: number;
+  created_at: string;
 }
 
-export async function fetchComments(symbol: string): Promise<Comment[]> {
-  return apiFetch<Comment[]>(`/api/social/comments/${symbol}`);
+export interface PostComment {
+  id: string;
+  post_id: string;
+  user_id: number;
+  user_name: string;
+  user_avatar: string | null;
+  content: string;
+  created_at: string;
 }
 
-export async function postComment(
-  token: string, 
-  symbol: string, 
-  content: string, 
-  sentiment?: string
-): Promise<Comment> {
-  return apiFetch<Comment>("/api/social/comments", {
-    method: "POST",
-    token,
-    body: JSON.stringify({ symbol, content, sentiment }),
-  });
+export interface UserSearchItem {
+  id: number;
+  full_name: string;
+  avatar_url: string | null;
+  is_premium: boolean;
 }
 
-export async function reactToComment(
+export interface ProfileView {
+  id: string;
+  viewer_id: number;
+  viewer_name: string;
+  viewer_avatar: string | null;
+  viewed_at: string;
+}
+
+export async function fetchGlobalFeed(skip: number = 0, limit: number = 20): Promise<Post[]> {
+  return apiFetch<Post[]>(`/api/v2/social/feed/global?skip=${skip}&limit=${limit}`);
+}
+
+export async function createPost(
   token: string,
-  commentId: number,
-  reactionType: string
-): Promise<void> {
-  await apiFetch("/api/social/react", {
+  content: string,
+  ticker?: string,
+  sentiment?: string,
+  file?: File
+): Promise<Post> {
+  const formData = new FormData();
+  formData.append("content", content);
+  if (ticker) formData.append("ticker", ticker);
+  if (sentiment) formData.append("sentiment", sentiment);
+  if (file) formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/api/v2/social/posts`, {
     method: "POST",
-    token,
-    body: JSON.stringify({ comment_id: commentId, reaction_type: reactionType }),
+    headers: {
+      "Authorization": `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!res.ok) throw new Error("Failed to create post");
+  return res.json();
+}
+
+export async function likePost(token: string, postId: string): Promise<{ status: string }> {
+  return apiFetch(`/api/v2/social/posts/${postId}/like`, { 
+    method: "POST", 
+    token 
   });
 }
 
-export async function fetchCommunityFeed(): Promise<Comment[]> {
-  return apiFetch<Comment[]>("/api/social/community/feed");
+export async function addPostComment(
+  token: string,
+  postId: string,
+  content: string
+): Promise<PostComment> {
+  const formData = new FormData();
+  formData.append("content", content);
+
+  const res = await fetch(`${API_BASE}/api/v2/social/posts/${postId}/comment`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!res.ok) throw new Error("Comment failed");
+  return res.json();
+}
+
+export async function fetchPostComments(postId: string): Promise<PostComment[]> {
+  return apiFetch<PostComment[]>(`/api/v2/social/posts/${postId}/comments`);
+}
+
+export async function searchUsers(q: string): Promise<UserSearchItem[]> {
+  return apiFetch<UserSearchItem[]>(`/api/v2/social/users/search?q=${encodeURIComponent(q)}`);
+}
+
+export async function recordProfileView(token: string, targetId: number): Promise<void> {
+  await apiFetch(`/api/v2/social/users/${targetId}/view`, { method: "POST", token });
+}
+
+export async function fetchMyProfileViews(token: string): Promise<ProfileView[]> {
+  return apiFetch<ProfileView[]>("/api/v2/social/users/me/views", { token });
 }
 

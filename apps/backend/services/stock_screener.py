@@ -2,7 +2,7 @@
 Stock Screener Service — fetches data for curated tickers, calculates
 technical indicators, and clusters them with KMeans to identify patterns.
 
-Falls back to realistic demo data when Yahoo Finance is unavailable.
+Falls back to realistic demo data when historical APIs are unavailable.
 """
 
 import logging
@@ -97,7 +97,7 @@ def _generate_demo_price_history(base_price: float, volatility: float, days: int
 
 def _generate_demo_data() -> dict:
     """Generate complete demo screener data when yfinance is unavailable."""
-    logger.info("📊 Generating demo data (Yahoo Finance unavailable)...")
+    logger.info("📊 Generating demo data (APIs unavailable)...")
     results = []
 
     for symbol, meta in DEMO_STOCKS.items():

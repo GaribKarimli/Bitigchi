@@ -359,10 +359,10 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center gap-4"
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full"
           >
             {/* Search */}
-            <div className="relative flex-1 w-full sm:max-w-md">
+            <div className="relative w-full sm:max-w-md">
               <Search
                 size={16}
                 className="absolute left-4 top-1/2 -translate-y-1/2"

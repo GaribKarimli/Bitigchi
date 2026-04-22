@@ -117,15 +117,10 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — allow frontend
+# CORS — allow all in development to avoid "Failed to fetch" issues
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.FRONTEND_URL,
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
